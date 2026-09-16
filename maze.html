@@ -2,8 +2,21 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>미로찾기 게임</title>
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="🌀 미로찾기 게임">
+<meta property="og:description" content="난이도를 골라 미로를 탈출해보세요! 방향키나 화면 버튼으로 플레이할 수 있습니다.">
+<meta property="og:image" content="https://anetnt78-star.github.io/-/thumbnail.png">
+<meta property="og:url" content="https://anetnt78-star.github.io/-/maze.html">
+<meta name="twitter:card" content="summary_large_image">
+
 <style>
+  * { box-sizing: border-box; }
+  html, body {
+    overflow-x: hidden;
+  }
   body {
     display: flex;
     flex-direction: column;
@@ -12,22 +25,32 @@
     color: #eee;
     font-family: sans-serif;
     margin: 0;
-    padding: 20px;
+    padding: 20px 10px;
+    text-align: center;
   }
-  h1 { margin: 0 0 10px; }
+  h1 { margin: 0 0 10px; font-size: 28px; }
   #info { margin-bottom: 10px; font-size: 18px; }
   canvas {
     background: #000;
     border: 4px solid #888;
+    width: min(94vw, 600px);
+    height: min(94vw, 600px);
+    touch-action: none;
   }
   #controls { margin-top: 12px; }
   button {
     padding: 8px 16px;
     font-size: 16px;
-    margin: 0 6px;
+    margin: 4px 6px;
     cursor: pointer;
+    touch-action: manipulation;
   }
-  #difficulty { margin-bottom: 10px; }
+  #difficulty {
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
   #difficulty button.active {
     background: #0af;
     color: #fff;
@@ -39,6 +62,30 @@
     font-weight: bold;
     color: #4f4;
     height: 28px;
+  }
+  #touchControls {
+    display: grid;
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(2, 56px);
+    gap: 8px;
+    margin-top: 18px;
+    justify-content: center;
+    user-select: none;
+  }
+  #touchControls button {
+    margin: 0;
+    font-size: 22px;
+    font-weight: bold;
+  }
+  .tc-up { grid-column: 2; grid-row: 1; }
+  .tc-left { grid-column: 1; grid-row: 2; }
+  .tc-down { grid-column: 2; grid-row: 2; }
+  .tc-right { grid-column: 3; grid-row: 2; }
+
+  @media (max-width: 480px) {
+    h1 { font-size: 22px; }
+    #info { font-size: 14px; }
+    button { padding: 6px 10px; font-size: 14px; }
   }
 </style>
 </head>
@@ -53,6 +100,12 @@
   </div>
   <canvas id="maze" width="600" height="600"></canvas>
   <div id="message"></div>
+  <div id="touchControls">
+    <button class="tc-up" data-dx="0" data-dy="-1">↑</button>
+    <button class="tc-left" data-dx="-1" data-dy="0">←</button>
+    <button class="tc-down" data-dx="0" data-dy="1">↓</button>
+    <button class="tc-right" data-dx="1" data-dy="0">→</button>
+  </div>
   <div id="controls">
     <button id="newGame">새 미로 생성</button>
     <button id="restart">다시 시작</button>
@@ -262,6 +315,12 @@ document.getElementById('restart').addEventListener('click', () => { resetPlayer
 
 document.querySelectorAll('#difficulty button').forEach(btn => {
   btn.addEventListener('click', () => setDifficulty(Number(btn.dataset.size)));
+});
+
+document.querySelectorAll('#touchControls button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tryMove(Number(btn.dataset.dx), Number(btn.dataset.dy));
+  });
 });
 
 setDifficulty(15);
