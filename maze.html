@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>미로찾기 게임</title>
+<style>
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #222;
+    color: #eee;
+    font-family: sans-serif;
+    margin: 0;
+    padding: 20px;
+  }
+  h1 { margin: 0 0 10px; }
+  #info { margin-bottom: 10px; font-size: 18px; }
+  canvas {
+    background: #000;
+    border: 4px solid #888;
+  }
+  #controls { margin-top: 12px; }
+  button {
+    padding: 8px 16px;
+    font-size: 16px;
+    margin: 0 6px;
+    cursor: pointer;
+  }
+  #difficulty { margin-bottom: 10px; }
+  #difficulty button.active {
+    background: #0af;
+    color: #fff;
+    font-weight: bold;
+  }
+  #message {
+    margin-top: 10px;
+    font-size: 22px;
+    font-weight: bold;
+    color: #4f4;
+    height: 28px;
+  }
+</style>
+</head>
+<body>
+  <h1>🌀 미로찾기 게임</h1>
+  <div id="info">방향키(↑↓←→) 또는 WASD로 이동하세요. 초록 칸(출구)에 도착하면 클리어!</div>
+  <div id="difficulty">
+    <button data-size="8">쉬움</button>
+    <button data-size="15">보통</button>
+    <button data-size="22">어려움</button>
+    <button data-size="30">매우 어려움</button>
+  </div>
+  <canvas id="maze" width="600" height="600"></canvas>
+  <div id="message"></div>
+  <div id="controls">
+    <button id="newGame">새 미로 생성</button>
+    <button id="restart">다시 시작</button>
+  </div>
+
+<script>
+const canvas = document.getElementById('maze');
+const ctx = canvas.getContext('2d');
+const messageEl = document.getElementById('message');
+
+let cols = 15;
+let rows = 15;
+let cellSize = canvas.width / cols;
+
+let grid = [];
+let player = { x: 0, y: 0 };
+let goal = { x: cols - 1, y: rows - 1 };
+let cleared = false;
+
+function Cell(x, y) {
+  return {
+    x, y,
+    walls: { top: true, right: true, bottom: true, left: true },
+    visited: false
+  };
+}
+
+function index(x, y) {
+  if (x < 0 || y < 0 || x >= cols || y >= rows) return -1;
+  return x + y * cols;
+}
+
+function generateMaze() {
+  grid = [];
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      grid.push(Cell(x, y));
+    }
+  }
+
+  const stack = [];
+  let current = grid[0];
+  current.visited = true;
+  stack.push(current);
+
+  function getNeighbors(cell) {
+    const neighbors = [];
+    const dirs = [
+      { dx: 0, dy: -1, self: 'top', other: 'bottom' },
+      { dx: 1, dy: 0, self: 'right', other: 'left' },
+      { dx: 0, dy: 1, self: 'bottom', other: 'top' },
+      { dx: -1, dy: 0, self: 'left', other: 'right' }
+    ];
+    for (const d of dirs) {
+      const idx = index(cell.x + d.dx, cell.y + d.dy);
+      if (idx !== -1 && !grid[idx].visited) {
+        neighbors.push({ cell: grid[idx], self: d.self, other: d.other });
+      }
+    }
+    return neighbors;
+  }
+
+  while (stack.length > 0) {
+    current = stack[stack.length - 1];
+    const neighbors = getNeighbors(current);
+    if (neighbors.length === 0) {
+      stack.pop();
+      continue;
+    }
+    const pick = neighbors[Math.floor(Math.random() * neighbors.length)];
+    current.walls[pick.self] = false;
+    pick.cell.walls[pick.other] = false;
+    pick.cell.visited = true;
+    stack.push(pick.cell);
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 벽 그리기
+  ctx.strokeStyle = '#0af';
+  ctx.lineWidth = Math.max(1, cellSize / 20);
+  for (const cell of grid) {
+    const px = cell.x * cellSize;
+    const py = cell.y * cellSize;
+    ctx.beginPath();
+    if (cell.walls.top) { ctx.moveTo(px, py); ctx.lineTo(px + cellSize, py); }
+    if (cell.walls.right) { ctx.moveTo(px + cellSize, py); ctx.lineTo(px + cellSize, py + cellSize); }
+    if (cell.walls.bottom) { ctx.moveTo(px, py + cellSize); ctx.lineTo(px + cellSize, py + cellSize); }
+    if (cell.walls.left) { ctx.moveTo(px, py); ctx.lineTo(px, py + cellSize); }
+    ctx.stroke();
+  }
+
+  // 출구
+  ctx.fillStyle = '#4f4';
+  ctx.fillRect(goal.x * cellSize + 4, goal.y * cellSize + 4, cellSize - 8, cellSize - 8);
+
+  // 플레이어 (사람 모양)
+  drawPerson(player.x * cellSize + cellSize / 2, player.y * cellSize + cellSize / 2, cellSize);
+}
+
+function drawPerson(cx, cy, size) {
+  const scale = size / 40; // 40px 기준으로 설계한 도안을 셀 크기에 맞춰 확대/축소
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = '#fa0';
+  ctx.fillStyle = '#fa0';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+
+  // 머리
+  ctx.beginPath();
+  ctx.arc(0, -12, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 몸통
+  ctx.beginPath();
+  ctx.moveTo(0, -7);
+  ctx.lineTo(0, 6);
+  ctx.stroke();
+
+  // 팔
+  ctx.beginPath();
+  ctx.moveTo(-8, -2);
+  ctx.lineTo(0, -3);
+  ctx.lineTo(8, -2);
+  ctx.stroke();
+
+  // 다리
+  ctx.beginPath();
+  ctx.moveTo(0, 6);
+  ctx.lineTo(-7, 15);
+  ctx.moveTo(0, 6);
+  ctx.lineTo(7, 15);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function canMove(x, y, dir) {
+  const idx = index(x, y);
+  if (idx === -1) return false;
+  return !grid[idx].walls[dir];
+}
+
+function tryMove(dx, dy) {
+  if (cleared) return;
+  let dir;
+  if (dx === 1) dir = 'right';
+  else if (dx === -1) dir = 'left';
+  else if (dy === 1) dir = 'bottom';
+  else if (dy === -1) dir = 'top';
+
+  if (canMove(player.x, player.y, dir)) {
+    player.x += dx;
+    player.y += dy;
+    draw();
+    checkGoal();
+  }
+}
+
+function checkGoal() {
+  if (player.x === goal.x && player.y === goal.y) {
+    cleared = true;
+    messageEl.textContent = '🎉 클리어! 축하합니다!';
+  }
+}
+
+function resetPlayer() {
+  player = { x: 0, y: 0 };
+  cleared = false;
+  messageEl.textContent = '';
+}
+
+function setDifficulty(size) {
+  cols = size;
+  rows = size;
+  cellSize = canvas.width / cols;
+  goal = { x: cols - 1, y: rows - 1 };
+
+  document.querySelectorAll('#difficulty button').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.size) === size);
+  });
+
+  newGame();
+}
+
+function newGame() {
+  generateMaze();
+  resetPlayer();
+  draw();
+}
+
+document.addEventListener('keydown', (e) => {
+  switch (e.key) {
+    case 'ArrowUp': case 'w': case 'W': tryMove(0, -1); e.preventDefault(); break;
+    case 'ArrowDown': case 's': case 'S': tryMove(0, 1); e.preventDefault(); break;
+    case 'ArrowLeft': case 'a': case 'A': tryMove(-1, 0); e.preventDefault(); break;
+    case 'ArrowRight': case 'd': case 'D': tryMove(1, 0); e.preventDefault(); break;
+  }
+});
+
+document.getElementById('newGame').addEventListener('click', newGame);
+document.getElementById('restart').addEventListener('click', () => { resetPlayer(); draw(); });
+
+document.querySelectorAll('#difficulty button').forEach(btn => {
+  btn.addEventListener('click', () => setDifficulty(Number(btn.dataset.size)));
+});
+
+setDifficulty(15);
+</script>
+</body>
+</html>
