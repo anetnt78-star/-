@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>오늘의 할 일</title>
+
+<!-- 홈 화면 앱 설정 (Android / iOS) -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#4f46e5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="할 일">
+
+<style>
+  /* ===== 기본 설정 ===== */
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #f3f4f8;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #9ca3af;
+    --line: #e5e7eb;
+    --primary: #4f46e5;
+    --danger: #dc2626;
+    --work: #2563eb;      /* 업무 = 파랑 */
+    --personal: #16a34a;  /* 개인 = 초록 */
+    --study: #ea580c;     /* 공부 = 주황 */
+    --shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  .app { max-width: 430px; margin: 0 auto; padding: 16px 14px 32px; }
+  .card { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px; }
+
+  /* ===== 버튼 공통 (최소 44x44 터치 영역) ===== */
+  button { font: inherit; cursor: pointer; border: none; min-height: 44px; min-width: 44px; border-radius: 12px; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ===== ① 헤더 ===== */
+  header { padding: 8px 4px 14px; }
+  header h1 { margin: 0; font-size: 26px; }
+  header .date { margin-top: 4px; color: var(--muted); font-size: 14px; }
+
+  /* ===== ② 진행률 ===== */
+  .progress-text { font-size: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; gap: 8px; }
+  .progress-text strong { color: var(--primary); white-space: nowrap; }
+  .bar { height: 12px; background: #eef0f6; border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; width: 0; background: var(--primary); border-radius: 999px; transition: width 0.3s; }
+  .bar-fill.done { background: var(--personal); }
+
+  /* ===== ③ 입력 영역 ===== */
+  .add-form { display: flex; flex-direction: column; gap: 10px; }
+  input[type="text"], select {
+    font: inherit; font-size: 16px; /* 16px 이상: iOS 자동 확대 방지 */
+    width: 100%; min-height: 44px; padding: 8px 12px;
+    border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--text);
+  }
+  input[type="text"]:focus, select:focus { outline: 2px solid var(--primary); border-color: transparent; }
+  .add-row { display: flex; gap: 10px; }
+  .add-row select { flex: 1; }
+  .btn-add { background: var(--primary); color: #fff; font-weight: 700; padding: 0 22px; }
+  .msg { color: var(--danger); font-size: 14px; min-height: 18px; margin: 0; }
+
+  /* ===== ④ 필터 탭 ===== */
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tab {
+    flex: 1; background: var(--card); color: var(--text); box-shadow: var(--shadow);
+    font-size: 14px; padding: 0 2px; line-height: 1.2;
+  }
+  .tab.active { background: var(--primary); color: #fff; font-weight: 700; }
+
+  /* ===== ⑤ 목록 ===== */
+  .list { list-style: none; margin: 0; padding: 0; }
+  .item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .item:last-child { border-bottom: none; }
+  .check { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .check input { width: 26px; height: 26px; margin: 0; accent-color: var(--primary); cursor: pointer; }
+  .badge { flex: none; color: #fff; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .badge.work { background: var(--work); }
+  .badge.personal { background: var(--personal); }
+  .badge.study { background: var(--study); }
+  .title { flex: 1 1 100px; min-width: 0; word-break: break-all; }
+  .item.completed .title { text-decoration: line-through; color: var(--muted); }
+  .item.completed .badge { opacity: 0.45; }
+  .btn-edit, .btn-del, .btn-save, .btn-cancel { font-size: 14px; padding: 0 12px; }
+  .btn-edit { background: #eef2ff; color: var(--primary); }
+  .btn-del { background: #fef2f2; color: var(--danger); }
+  .btn-save { background: var(--primary); color: #fff; font-weight: 700; }
+  .btn-cancel { background: #f3f4f6; color: var(--text); }
+  .edit-box { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; padding-left: 4px; }
+  .edit-row { display: flex; gap: 8px; }
+  .edit-row select { flex: 1; }
+  .empty { text-align: center; color: var(--muted); padding: 24px 0; margin: 0; }
+
+  /* ===== ⑥ 하단 ===== */
+  .btn-clear { width: 100%; background: #fef2f2; color: var(--danger); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ① 헤더 -->
+  <header>
+    <h1>오늘의 할 일</h1>
+    <div class="date" id="today"></div>
+  </header>
+
+  <!-- ② 진행률 바 -->
+  <section class="card" aria-label="진행률">
+    <div class="progress-text">
+      <span id="progressMsg"></span>
+      <strong id="progressPct">0%</strong>
+    </div>
+    <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+  </section>
+
+  <!-- ③ 입력 영역 -->
+  <form class="card add-form" id="addForm" autocomplete="off">
+    <input type="text" id="newTitle" maxlength="100" placeholder="할 일을 입력하세요" aria-label="할 일 입력">
+    <div class="add-row">
+      <select id="newCategory" aria-label="카테고리">
+        <option value="work">업무</option>
+        <option value="personal">개인</option>
+        <option value="study">공부</option>
+      </select>
+      <button type="submit" class="btn-add">추가</button>
+    </div>
+    <p class="msg" id="addMsg" role="alert"></p>
+  </form>
+
+  <!-- ④ 필터 탭 -->
+  <nav class="tabs" id="tabs" aria-label="카테고리 필터"></nav>
+
+  <!-- ⑤ 할 일 목록 -->
+  <section class="card" aria-label="할 일 목록">
+    <ul class="list" id="list"></ul>
+  </section>
+
+  <!-- ⑥ 하단 버튼 -->
+  <button type="button" class="btn-clear" id="clearDone">완료된 항목 모두 삭제</button>
+</div>
+
+<script>
+'use strict';
+
+/* =========================================================
+   설정값 / 상태(앱이 기억하는 값들)
+   ========================================================= */
+const STORAGE_KEY = 'todoApp.v1';              // 할 일 목록 저장 키
+const CATEGORY_KEY = 'todoApp.v1.lastCategory'; // 마지막 선택 카테고리 저장 키
+const CATEGORIES = { work: '업무', personal: '개인', study: '공부' }; // 카테고리 표시명
+const FILTERS = [['all', '전체'], ['work', '업무'], ['personal', '개인'], ['study', '공부']];
+
+let todos = [];          // 할 일 전체 목록(배열)
+let currentFilter = 'all'; // 현재 선택된 필터 탭
+let editingId = null;    // 지금 수정 중인 항목의 id (없으면 null)
+
+/* 자주 쓰는 화면 요소를 미리 찾아 둠 */
+const $ = (id) => document.getElementById(id);
+
+/* =========================================================
+   저장 / 불러오기
+   ========================================================= */
+
+// 한 항목이 올바른 형태인지 검사한다. (손상된 데이터 걸러내기용)
+function isValidTodo(t) {
+  return t && typeof t === 'object'
+    && typeof t.id === 'string'
+    && typeof t.title === 'string' && t.title.length >= 1 && t.title.length <= 100
+    && Object.prototype.hasOwnProperty.call(CATEGORIES, t.category)
+    && typeof t.completed === 'boolean'
+    && typeof t.createdAt === 'number';
+}
+
+// localStorage에서 목록을 불러온다. 없거나 손상됐으면 빈 목록을 돌려준다.
+function loadTodos() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) return [];
+    return data.filter(isValidTodo);
+  } catch (e) {
+    return []; // 어떤 오류가 나도 앱이 멈추지 않게 빈 목록으로 시작
+  }
+}
+
+// 현재 목록을 JSON 문자열로 바꿔 localStorage에 저장한다.
+function saveTodos() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+  } catch (e) {
+    // 저장 공간이 없거나 사생활 보호 모드 등: 앱은 계속 동작
+  }
+}
+
+// 마지막으로 고른 카테고리를 불러온다. (없으면 업무)
+function loadLastCategory() {
+  try {
+    const c = localStorage.getItem(CATEGORY_KEY);
+    return Object.prototype.hasOwnProperty.call(CATEGORIES, c) ? c : 'work';
+  } catch (e) {
+    return 'work';
+  }
+}
+
+// 마지막으로 고른 카테고리를 저장한다.
+function saveLastCategory(value) {
+  try { localStorage.setItem(CATEGORY_KEY, value); } catch (e) { /* 무시 */ }
+}
+
+/* =========================================================
+   화면 그리기 (render)
+   ========================================================= */
+
+// 오늘 날짜를 "2025년 1월 5일 일요일" 형태로 헤더에 표시한다.
+function renderDate() {
+  $('today').textContent = new Date().toLocaleDateString('ko-KR', {
+    year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+  });
+}
+
+// 진행률 바와 문구를 갱신한다. (카테고리와 상관없이 전체 기준)
+function renderProgress() {
+  const total = todos.length;
+  const done = todos.filter((t) => t.completed).length;
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+
+  let msg;
+  if (total === 0) msg = '할 일을 추가해 보세요';
+  else if (pct === 100) msg = `🎉 모두 완료! 정말 잘했어요 (${total}개 중 ${done}개 완료)`;
+  else msg = `${total}개 중 ${done}개 완료`;
+
+  $('progressMsg').textContent = msg;
+  $('progressPct').textContent = pct + '%';
+  $('barFill').style.width = pct + '%';
+  $('barFill').classList.toggle('done', total > 0 && pct === 100);
+}
+
+// 필터 탭(전체/업무/개인/공부)을 개수와 함께 그린다.
+function renderTabs() {
+  const tabs = $('tabs');
+  tabs.textContent = '';
+  FILTERS.forEach(([key, label]) => {
+    const count = key === 'all' ? todos.length : todos.filter((t) => t.category === key).length;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tab' + (key === currentFilter ? ' active' : '');
+    btn.textContent = `${label} ${count}`;
+    btn.addEventListener('click', () => {
+      currentFilter = key; // 보기만 바꾸고 데이터는 그대로
+      editingId = null;
+      render();
+    });
+    tabs.appendChild(btn);
+  });
+}
+
+// 정렬: 미완료 먼저, 같은 그룹 안에서는 최신순
+function sortedTodos() {
+  return todos.slice().sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    return b.createdAt - a.createdAt;
+  });
+}
+
+// 카테고리 드롭다운(select)을 만들어 돌려준다. (수정 모드에서 사용)
+function makeCategorySelect(selected) {
+  const sel = document.createElement('select');
+  sel.setAttribute('aria-label', '카테고리');
+  Object.keys(CATEGORIES).forEach((key) => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = CATEGORIES[key];
+    if (key === selected) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  return sel;
+}
+
+// 버튼 하나를 만들어 돌려준다.
+function makeButton(text, className, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = className;
+  b.textContent = text;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+// 할 일 한 줄(li)을 만든다. 수정 중이면 수정 화면, 아니면 일반 화면.
+function buildItem(todo) {
+  const li = document.createElement('li');
+  li.className = 'item' + (todo.completed ? ' completed' : '');
+
+  // 왼쪽 체크박스 (44x44 영역)
+  const label = document.createElement('label');
+  label.className = 'check';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = todo.completed;
+  cb.setAttribute('aria-label', '완료 체크');
+  cb.addEventListener('change', () => toggleTodo(todo.id));
+  label.appendChild(cb);
+  li.appendChild(label);
+
+  // 카테고리 배지
+  const badge = document.createElement('span');
+  badge.className = 'badge ' + todo.category;
+  badge.textContent = CATEGORIES[todo.category];
+  li.appendChild(badge);
+
+  if (todo.id === editingId) {
+    // ----- 수정 모드 -----
+    const box = document.createElement('div');
+    box.className = 'edit-box';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 100;
+    input.value = todo.title;
+    input.setAttribute('aria-label', '할 일 수정');
+    const sel = makeCategorySelect(todo.category);
+    const msg = document.createElement('p');
+    msg.className = 'msg';
+
+    // 저장 버튼 동작: 입력 검사 후 반영
+    const doSave = () => {
+      if (!saveEdit(todo.id, input.value, sel.value)) msg.textContent = '할 일을 입력해 주세요';
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+      if (e.key === 'Escape') cancelEdit();
+    });
+
+    const row = document.createElement('div');
+    row.className = 'edit-row';
+    row.appendChild(sel);
+    row.appendChild(makeButton('저장', 'btn-save', doSave));
+    row.appendChild(makeButton('취소', 'btn-cancel', cancelEdit));
+    box.appendChild(input);
+    box.appendChild(row);
+    box.appendChild(msg);
+    li.appendChild(box);
+    setTimeout(() => input.focus(), 0); // 수정 시작 시 입력칸에 커서
+  } else {
+    // ----- 일반 모드 -----
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = todo.title; // textContent: <, > 도 글자 그대로 표시
+    li.appendChild(title);
+    li.appendChild(makeButton('수정', 'btn-edit', () => startEdit(todo.id)));
+    li.appendChild(makeButton('삭제', 'btn-del', () => deleteTodo(todo.id)));
+  }
+  return li;
+}
+
+// 목록 전체를 다시 그린다.
+function renderList() {
+  const list = $('list');
+  list.textContent = '';
+  const visible = sortedTodos().filter((t) => currentFilter === 'all' || t.category === currentFilter);
+
+  if (visible.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = todos.length === 0 ? '아직 할 일이 없어요' : '이 카테고리에는 할 일이 없어요';
+    list.appendChild(li);
+    return;
+  }
+  visible.forEach((t) => list.appendChild(buildItem(t)));
+}
+
+// 하단 "완료된 항목 모두 삭제" 버튼의 활성/비활성을 정한다.
+function renderClearButton() {
+  $('clearDone').disabled = !todos.some((t) => t.completed);
+}
+
+// 화면 전체를 한 번에 새로 그린다.
+function render() {
+  renderProgress();
+  renderTabs();
+  renderList();
+  renderClearButton();
+}
+
+/* =========================================================
+   기능: 추가 / 수정 / 삭제 / 완료
+   ========================================================= */
+
+// 새 할 일을 추가한다. (공백만 있으면 안내 문구를 보여주고 등록하지 않음)
+function addTodo(titleRaw, category) {
+  const title = titleRaw.trim();
+  if (!title) {
+    $('addMsg').textContent = '할 일을 입력해 주세요';
+    return;
+  }
+  $('addMsg').textContent = '';
+  const now = Date.now();
+  todos.push({
+    id: String(now) + Math.random().toString(36).slice(2, 6), // 고유값
+    title: title.slice(0, 100),
+    category: category,
+    completed: false,
+    createdAt: now
+  });
+  saveTodos();
+  render();
+}
+
+// 완료 체크를 켜고 끈다.
+function toggleTodo(id) {
+  const t = todos.find((x) => x.id === id);
+  if (!t) return;
+  t.completed = !t.completed;
+  saveTodos();
+  render();
+}
+
+// 수정 모드를 시작한다. (한 번에 하나만: id 하나만 기억하므로 자동으로 보장됨)
+function startEdit(id) {
+  editingId = id;
+  render();
+}
+
+// 수정 모드를 취소한다.
+function cancelEdit() {
+  editingId = null;
+  render();
+}
+
+// 수정 내용을 저장한다. 성공하면 true, 빈 입력이면 false.
+function saveEdit(id, titleRaw, category) {
+  const title = titleRaw.trim();
+  if (!title) return false;
+  const t = todos.find((x) => x.id === id);
+  if (t) {
+    t.title = title.slice(0, 100);
+    t.category = category;
+    saveTodos();
+  }
+  editingId = null;
+  render();
+  return true;
+}
+
+// 항목 하나를 삭제한다. (항상 확인창을 거침)
+function deleteTodo(id) {
+  if (!confirm('정말 삭제할까요?')) return;
+  todos = todos.filter((t) => t.id !== id);
+  if (editingId === id) editingId = null;
+  saveTodos();
+  render();
+}
+
+// 완료된 항목을 모두 삭제한다. (확인창 거침)
+function clearCompleted() {
+  const n = todos.filter((t) => t.completed).length;
+  if (n === 0) return;
+  if (!confirm(`완료된 ${n}개 항목을 모두 삭제할까요?`)) return;
+  todos = todos.filter((t) => !t.completed);
+  editingId = null;
+  saveTodos();
+  render();
+}
+
+/* =========================================================
+   시작: 이벤트 연결 및 첫 화면
+   ========================================================= */
+
+// 앱을 시작한다. (저장 데이터 복원 → 이벤트 연결 → 첫 그리기)
+function init() {
+  todos = loadTodos();
+  renderDate();
+
+  $('newCategory').value = loadLastCategory();
+  $('newCategory').addEventListener('change', (e) => saveLastCategory(e.target.value));
+
+  // 입력창에서 Enter 또는 [추가] 버튼 → form의 submit 이벤트로 함께 처리됨
+  $('addForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    addTodo($('newTitle').value, $('newCategory').value);
+    if (!$('addMsg').textContent) $('newTitle').value = ''; // 등록 성공 시에만 입력칸 비움
+    $('newTitle').focus();
+  });
+  $('newTitle').addEventListener('input', () => { $('addMsg').textContent = ''; });
+
+  $('clearDone').addEventListener('click', clearCompleted);
+  render();
+
+  // 오프라인 사용을 돕는 서비스 워커 등록 (지원 안 되는 환경에서는 조용히 무시)
+  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+}
+
+init();
+</script>
+</body>
+</html>
